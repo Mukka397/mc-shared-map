@@ -1075,10 +1075,11 @@ function drawAxes(W, H, dim) {
 
 function drawRoutes() {
   for (const r of state.routes.values()) {
-    drawRoutePolyline(r.points || [], r.color || '#4a7eff', r.id === state.selectedRouteId, r.name);
+    const sel = r.id === state.selectedRouteId;
+    drawRoutePolyline(r.points || [], r.color || '#4a7eff', sel, r.name, sel);
   }
 }
-function drawRoutePolyline(points, color, selected, label) {
+function drawRoutePolyline(points, color, selected, label, showCoords) {
   if (!points || points.length < 1) return;
   ctx.save();
   ctx.strokeStyle = color;
@@ -1104,6 +1105,13 @@ function drawRoutePolyline(points, color, selected, label) {
     ctx.arc(sx, sy, selected ? 4 : 3, 0, Math.PI * 2);
     ctx.fill();
   }
+  // coordinate labels at each point (selected route or draft)
+  if (showCoords) {
+    points.forEach((p, i) => {
+      const { sx, sy } = w2s(p.x, p.z);
+      drawCoordLabel(sx, sy, p.x, p.z, color, i + 1);
+    });
+  }
   // label at first point
   if (label && points.length > 0 && selected) {
     const { sx, sy } = w2s(points[0].x, points[0].z);
@@ -1117,9 +1125,24 @@ function drawRoutePolyline(points, color, selected, label) {
     ctx.fillText(label, sx, sy - 14);
   }
 }
+
+function drawCoordLabel(sx, sy, x, z, color, indexNum) {
+  const text = (indexNum != null ? `${indexNum}: ` : '') + `(${Math.round(x)}, ${Math.round(z)})`;
+  ctx.save();
+  ctx.font = '10px ui-monospace, SFMono-Regular, Menlo, monospace';
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left';
+  const tw = ctx.measureText(text).width;
+  const lx = sx + 8, ly = sy + 14;
+  ctx.fillStyle = 'rgba(17,20,26,0.9)';
+  ctx.fillRect(lx - 3, ly - 8, tw + 6, 14);
+  ctx.fillStyle = color;
+  ctx.fillText(text, lx, ly);
+  ctx.restore();
+}
 function drawRouteDraft() {
   if (!state.routeDraft) return;
-  drawRoutePolyline(state.routeDraft.points, state.routeDraft.color, true, state.routeDraft.name || '(新規ルート)');
+  drawRoutePolyline(state.routeDraft.points, state.routeDraft.color, true, state.routeDraft.name || '(新規ルート)', true);
   // draft hint: dashed line from last point to mouse
   if (state.routeDraft.cursorPos && state.routeDraft.points.length > 0) {
     const last = state.routeDraft.points[state.routeDraft.points.length - 1];
@@ -1193,6 +1216,7 @@ function drawDistance() {
   ctx.save();
   ctx.fillStyle = '#ffd84a';
   ctx.beginPath(); ctx.arc(a.sx, a.sy, 5, 0, Math.PI * 2); ctx.fill();
+  drawCoordLabel(a.sx, a.sy, from.x, from.z, '#ffd84a', 1);
   if (to) {
     const b = w2s(to.x, to.z);
     ctx.strokeStyle = '#ffd84a';
@@ -1204,6 +1228,7 @@ function drawDistance() {
     ctx.setLineDash([]);
     ctx.fillStyle = '#ffd84a';
     ctx.beginPath(); ctx.arc(b.sx, b.sy, 5, 0, Math.PI * 2); ctx.fill();
+    drawCoordLabel(b.sx, b.sy, to.x, to.z, '#ffd84a', 2);
 
     // label at midpoint
     const dx = to.x - from.x, dz = to.z - from.z;
