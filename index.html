@@ -1,0 +1,2105 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>マイクラ共有マップ</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif; background: #1a1d24; color: #e6e8eb; -webkit-tap-highlight-color: transparent; }
+  body { display: flex; flex-direction: column; }
+
+  /* ===== Top bar ===== */
+  .topbar {
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 14px; background: #11141a; border-bottom: 1px solid #2a2f3a;
+    flex-shrink: 0;
+  }
+  .topbar h1 { font-size: 15px; margin: 0; font-weight: 600; letter-spacing: 0.02em; }
+  .topbar .room { font-size: 12px; color: #8b94a3; }
+  .topbar .room code { background: #232833; padding: 2px 6px; border-radius: 4px; color: #b8c2d4; }
+  .topbar .spacer { flex: 1; }
+
+  /* ===== Dimension tabs ===== */
+  .dim-tabs { display: flex; gap: 2px; background: #0c0e13; padding: 2px; border-radius: 7px; border: 1px solid #2a2f3a; }
+  .dim-tab {
+    background: transparent; color: #8b94a3; border: none; border-radius: 5px;
+    padding: 5px 12px; font-size: 12px; cursor: pointer; font-family: inherit;
+    display: flex; align-items: center; gap: 5px; transition: background 0.15s;
+  }
+  .dim-tab:hover { background: #1c212b; color: #e6e8eb; }
+  .dim-tab.active { color: #ffffff; }
+  .dim-tab.active.dim-overworld { background: #2a4a3a; }
+  .dim-tab.active.dim-nether    { background: #4a2a2a; }
+  .dim-tab.active.dim-end       { background: #3a2a4a; }
+  .dim-tab .dim-icon { font-size: 13px; }
+  .topbar input[type="text"] {
+    background: #232833; color: #e6e8eb; border: 1px solid #2a2f3a; border-radius: 6px;
+    padding: 5px 10px; font-size: 13px; width: 140px;
+  }
+  .topbar input[type="text"]:focus { outline: none; border-color: #4a7eff; }
+  .topbar .status { font-size: 12px; padding: 3px 8px; border-radius: 4px; }
+  .topbar .status.ok { background: #1d3a2a; color: #6cd293; }
+  .topbar .status.warn { background: #3a2d1d; color: #d2a06c; }
+  .topbar .status.err { background: #3a1d1d; color: #d26c6c; }
+  .topbar button {
+    background: #232833; color: #e6e8eb; border: 1px solid #2a2f3a; border-radius: 6px;
+    padding: 5px 12px; font-size: 13px; cursor: pointer;
+  }
+  .topbar button:hover { background: #2c323e; }
+  .menu-toggle { display: none !important; }
+
+  /* ===== Background config modal ===== */
+  .bg-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .bg-form-grid .form-row { margin-bottom: 0; }
+  .bg-form-row { margin: 8px 0; }
+  .bg-form-row label { display: block; font-size: 11px; color: #8b94a3; margin-bottom: 3px; }
+  .bg-form-row input, .bg-form-row select {
+    width: 100%; background: #1f242e; color: #e6e8eb; border: 1px solid #2a2f3a;
+    border-radius: 5px; padding: 6px 9px; font-size: 13px; font-family: inherit;
+  }
+  .bg-form-row input[type="range"] { padding: 0; }
+  .bg-form-row input[type="checkbox"] { width: auto; margin-right: 6px; vertical-align: middle; }
+  .bg-form-row .checkbox-label { display: flex; align-items: center; font-size: 13px; color: #e6e8eb; cursor: pointer; }
+  .bg-opacity-row { display: flex; align-items: center; gap: 10px; }
+  .bg-opacity-row input[type="range"] { flex: 1; }
+  .bg-opacity-row .opacity-val { font-size: 12px; color: #8b94a3; font-family: ui-monospace, monospace; min-width: 40px; text-align: right; }
+
+  /* ===== Main layout ===== */
+  .main { display: flex; flex: 1; min-height: 0; }
+  .canvas-wrap { flex: 1; position: relative; background: #0f1218; min-width: 0; }
+  canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
+  canvas.dragging { cursor: grabbing; }
+  canvas.tool-distance, canvas.tool-route { cursor: crosshair; }
+
+  .coord-display {
+    position: absolute; bottom: 12px; left: 12px;
+    background: rgba(17, 20, 26, 0.85); padding: 6px 12px; border-radius: 6px;
+    font-size: 12px; color: #b8c2d4; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    border: 1px solid #2a2f3a; pointer-events: none;
+  }
+  .zoom-controls {
+    position: absolute; bottom: 12px; right: 12px; display: flex; flex-direction: column; gap: 4px;
+  }
+  .zoom-controls button {
+    width: 32px; height: 32px; background: rgba(17, 20, 26, 0.85); color: #e6e8eb;
+    border: 1px solid #2a2f3a; border-radius: 6px; font-size: 16px; cursor: pointer;
+  }
+  .zoom-controls button:hover { background: rgba(44, 50, 62, 0.9); }
+
+  /* ===== Tool overlay ===== */
+  .tools-overlay { position: absolute; top: 12px; left: 12px; display: flex; flex-direction: column; gap: 4px; z-index: 5; }
+  .tools-overlay button {
+    width: 36px; height: 36px; background: rgba(17,20,26,0.85); color: #e6e8eb;
+    border: 1px solid #2a2f3a; border-radius: 6px; font-size: 17px; cursor: pointer;
+  }
+  .tools-overlay button:hover { background: rgba(44,50,62,0.9); }
+  .tools-overlay button.active { background: #4a7eff; border-color: #4a7eff; color: white; }
+
+  .tool-banner {
+    position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    background: rgba(74,126,255,0.92); color: white; padding: 7px 14px; border-radius: 6px;
+    font-size: 12px; display: flex; align-items: center; gap: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    max-width: calc(100% - 120px); z-index: 6;
+  }
+  .tool-banner button {
+    padding: 3px 10px; background: rgba(0,0,0,0.25); color: white;
+    border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; cursor: pointer; font-size: 11px;
+  }
+  .tool-banner button:hover { background: rgba(0,0,0,0.4); }
+
+  .legend {
+    position: absolute; top: 12px; right: 12px;
+    background: rgba(17, 20, 26, 0.85); padding: 8px 10px; border-radius: 6px;
+    font-size: 11px; border: 1px solid #2a2f3a; max-width: 160px;
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+  /* ===== Sidebar ===== */
+  .sidebar {
+    width: 320px; background: #161a22; border-left: 1px solid #2a2f3a;
+    display: flex; flex-direction: column; flex-shrink: 0;
+  }
+  .sidebar-tabs { display: flex; background: #0e1117; border-bottom: 1px solid #2a2f3a; flex-shrink: 0; }
+  .sb-tab {
+    flex: 1; padding: 10px 8px; background: none; border: none; color: #8b94a3;
+    cursor: pointer; font-size: 13px; font-family: inherit;
+    border-bottom: 2px solid transparent; transition: color 0.15s, border-color 0.15s;
+  }
+  .sb-tab:hover { color: #e6e8eb; }
+  .sb-tab.active { color: #e6e8eb; border-bottom-color: #4a7eff; }
+  .sidebar-panel { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+  .sidebar-panel[hidden] { display: none; }
+  .sidebar-section { padding: 14px; border-bottom: 1px solid #2a2f3a; }
+  .sidebar-section h2 { font-size: 13px; margin: 0 0 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #8b94a3; font-weight: 600; }
+  .form-row { margin-bottom: 8px; }
+  .form-row label { display: block; font-size: 11px; color: #8b94a3; margin-bottom: 3px; }
+  .form-row input, .form-row select, .form-row textarea {
+    width: 100%; background: #1f242e; color: #e6e8eb; border: 1px solid #2a2f3a;
+    border-radius: 5px; padding: 6px 9px; font-size: 13px; font-family: inherit;
+  }
+  .form-row input:focus, .form-row select:focus, .form-row textarea:focus { outline: none; border-color: #4a7eff; }
+  .coord-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+  .form-actions { display: flex; gap: 6px; margin-top: 10px; }
+  .btn { flex: 1; padding: 8px 10px; border: none; border-radius: 5px; font-size: 13px; cursor: pointer; font-weight: 500; font-family: inherit; }
+  .btn-primary { background: #4a7eff; color: white; }
+  .btn-primary:hover { background: #3b6dec; }
+  .btn-primary:disabled { background: #2a2f3a; color: #5a6373; cursor: not-allowed; }
+  .btn-secondary { background: #2a2f3a; color: #e6e8eb; }
+  .btn-secondary:hover { background: #353c48; }
+  .btn-danger { background: #5a2027; color: #ffb3b3; }
+  .btn-danger:hover { background: #6e2730; }
+
+  /* ===== Search & filter ===== */
+  .search-row { position: relative; }
+  .search-row input { padding-right: 28px; width: 100%; background: #1f242e; color: #e6e8eb; border: 1px solid #2a2f3a; border-radius: 5px; padding: 6px 28px 6px 9px; font-size: 13px; font-family: inherit; }
+  .search-row .search-clear {
+    position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+    background: none; border: none; color: #5a6373; cursor: pointer; font-size: 14px; padding: 2px 6px;
+  }
+  .search-row .search-clear:hover { color: #e6e8eb; }
+  .filter-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+  .filter-chip {
+    font-size: 11px; padding: 3px 9px; background: #1f242e; color: #8b94a3;
+    border: 1px solid #2a2f3a; border-radius: 12px; cursor: pointer; user-select: none;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .filter-chip:hover { background: #262c38; }
+  .filter-chip.active { background: #2a3340; color: #e6e8eb; border-color: #4a7eff; }
+  .filter-actions { display: flex; gap: 4px; margin-top: 6px; }
+  .filter-actions button { padding: 2px 8px; font-size: 11px; background: transparent; color: #8b94a3; border: 1px solid #2a2f3a; border-radius: 4px; cursor: pointer; }
+  .filter-actions button:hover { color: #e6e8eb; }
+
+  /* ===== Marker / route list ===== */
+  .marker-list, .route-list { flex: 1; overflow-y: auto; }
+  .marker-list-empty, .route-list-empty { padding: 20px 14px; color: #5a6373; font-size: 12px; text-align: center; }
+  .marker-item, .route-item {
+    padding: 9px 14px; border-bottom: 1px solid #1f242e; cursor: pointer;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .marker-item:hover, .route-item:hover { background: #1c212b; }
+  .marker-item.selected, .route-item.selected { background: #1f2b44; border-left: 3px solid #4a7eff; padding-left: 11px; }
+  .marker-icon {
+    width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 14px; flex-shrink: 0;
+  }
+  .marker-info, .route-info { min-width: 0; flex: 1; }
+  .marker-name, .route-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .marker-coords { font-size: 11px; color: #8b94a3; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .marker-meta, .route-meta { font-size: 10px; color: #5a6373; margin-top: 1px; }
+  .route-color-swatch { width: 22px; height: 22px; border-radius: 4px; flex-shrink: 0; border: 1px solid rgba(255,255,255,0.1); }
+
+  /* ===== Portal hint ===== */
+  .portal-hint {
+    background: linear-gradient(135deg, #2a1d3d 0%, #1f242e 100%);
+    border: 1px solid #4a3a6a; border-radius: 5px; padding: 9px 11px;
+    margin-top: 10px; font-size: 12px; color: #d4c2e6;
+  }
+  .portal-hint .ph-title { font-weight: 600; margin-bottom: 4px; color: #e0d0f0; }
+  .portal-hint .ph-coords { font-family: ui-monospace, monospace; color: #ffffff; background: rgba(0,0,0,0.3); padding: 4px 8px; border-radius: 3px; display: inline-block; }
+  .portal-hint button { margin-top: 8px; padding: 5px 11px; font-size: 11px; background: #4a3a6a; color: white; border: none; border-radius: 4px; cursor: pointer; }
+  .portal-hint button:hover { background: #5a4a7a; }
+
+  /* ===== Color palette ===== */
+  .color-palette { display: flex; gap: 4px; flex-wrap: wrap; }
+  .color-swatch { width: 24px; height: 24px; border-radius: 4px; cursor: pointer; border: 2px solid transparent; }
+  .color-swatch.active { border-color: white; }
+
+  /* ===== Modal ===== */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none;
+    align-items: center; justify-content: center; z-index: 100;
+  }
+  .modal-overlay.active { display: flex; }
+  .modal {
+    background: #161a22; border: 1px solid #2a2f3a; border-radius: 8px;
+    padding: 24px; max-width: 560px; width: calc(100% - 32px); max-height: 85vh; overflow-y: auto;
+  }
+  .modal h2 { margin: 0 0 12px; font-size: 16px; }
+  .modal h3 { margin: 18px 0 6px; font-size: 13px; color: #8b94a3; text-transform: uppercase; letter-spacing: 0.06em; }
+  .modal p, .modal li { font-size: 13px; line-height: 1.6; color: #b8c2d4; }
+  .modal code, .modal pre {
+    background: #0f1218; padding: 2px 6px; border-radius: 4px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #d4dae6;
+  }
+  .modal pre { padding: 10px 12px; overflow-x: auto; line-height: 1.5; }
+  .modal a { color: #6c9eff; }
+  .modal-close-row { display: flex; justify-content: flex-end; margin-top: 16px; }
+  .modal textarea {
+    width: 100%; background: #1f242e; color: #e6e8eb; border: 1px solid #2a2f3a;
+    border-radius: 5px; padding: 8px; font-size: 12px; font-family: ui-monospace, monospace;
+    resize: vertical;
+  }
+
+  /* ===== Mobile ===== */
+  .sidebar-overlay { display: none; }
+
+  @media (max-width: 720px) {
+    .topbar { gap: 8px; padding: 6px 10px; flex-wrap: wrap; }
+    .topbar h1 { font-size: 13px; }
+    .topbar .room { display: none; }
+    .topbar input[type="text"] { width: 110px; }
+    .topbar .status { font-size: 11px; }
+    .menu-toggle { display: inline-block !important; font-size: 16px; padding: 5px 10px; }
+    .dim-tab { padding: 4px 8px; font-size: 11px; }
+    .dim-tab .dim-icon { font-size: 12px; }
+
+    .sidebar {
+      position: fixed; right: 0; top: 0; bottom: 0; width: 88%; max-width: 340px;
+      z-index: 50; transform: translateX(100%); transition: transform 0.22s ease-out;
+      box-shadow: -4px 0 20px rgba(0,0,0,0.5);
+    }
+    .sidebar.open { transform: translateX(0); }
+    .sidebar-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 49; display: none;
+    }
+    .sidebar-overlay.active { display: block; }
+    .canvas-wrap { width: 100%; }
+    .legend { display: none; }
+    .tool-banner { font-size: 11px; max-width: calc(100% - 100px); }
+    .tools-overlay button { width: 40px; height: 40px; font-size: 18px; }
+    .zoom-controls button { width: 38px; height: 38px; font-size: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <button id="menu-toggle" class="menu-toggle" title="メニュー">☰</button>
+  <h1>マイクラ共有マップ</h1>
+  <span class="room">部屋: <code id="room-label">―</code></span>
+  <div class="dim-tabs" id="dim-tabs"></div>
+  <span class="spacer"></span>
+  <input type="text" id="username-input" placeholder="あなたの名前" maxlength="20">
+  <span id="conn-status" class="status warn">接続中…</span>
+  <button id="data-btn" title="データのエクスポート/インポート">📁</button>
+  <button id="bg-btn" title="背景マップ設定">🗺️</button>
+  <button id="help-btn" title="セットアップ・使い方">?</button>
+</div>
+
+<div class="main">
+  <div class="canvas-wrap">
+    <canvas id="map"></canvas>
+    <div class="tools-overlay">
+      <button id="tool-distance" title="距離計測 (Esc で終了)">📏</button>
+      <button id="tool-route" title="ルート作成 (クリックで点追加, Esc で終了)">🛤️</button>
+    </div>
+    <div id="tool-banner" class="tool-banner" hidden></div>
+    <div class="coord-display" id="coord-display">x: 0, z: 0</div>
+    <div class="zoom-controls">
+      <button id="zoom-in" title="ズームイン">+</button>
+      <button id="zoom-out" title="ズームアウト">−</button>
+      <button id="zoom-reset" title="原点に戻る">⌖</button>
+    </div>
+    <div class="legend" id="legend"></div>
+  </div>
+
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-tabs">
+      <button class="sb-tab active" data-tab="markers">📍 施設</button>
+      <button class="sb-tab" data-tab="routes">🛤️ ルート</button>
+    </div>
+
+    <!-- ===== Markers panel ===== -->
+    <div class="sidebar-panel" id="panel-markers">
+      <div class="sidebar-section">
+        <h2 id="form-title">施設を追加</h2>
+        <form id="marker-form">
+          <div class="form-row">
+            <label>施設名</label>
+            <input type="text" id="f-name" maxlength="40" required placeholder="例: メイン拠点">
+          </div>
+          <div class="form-row">
+            <label>座標 (X / Y / Z)</label>
+            <div class="coord-grid">
+              <input type="number" id="f-x" required step="1" placeholder="X">
+              <input type="number" id="f-y" step="1" placeholder="Y (任意)">
+              <input type="number" id="f-z" required step="1" placeholder="Z">
+            </div>
+          </div>
+          <div class="form-row">
+            <label>カテゴリ</label>
+            <select id="f-category"></select>
+          </div>
+          <div class="form-row">
+            <label>メモ (任意)</label>
+            <textarea id="f-note" rows="2" maxlength="200" placeholder="メモ・補足"></textarea>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="submit-btn">追加</button>
+            <button type="button" class="btn btn-secondary" id="cancel-btn" style="display:none">取消</button>
+            <button type="button" class="btn btn-danger" id="delete-btn" style="display:none">削除</button>
+          </div>
+        </form>
+        <div class="portal-hint" id="portal-hint" hidden></div>
+      </div>
+
+      <div class="sidebar-section">
+        <h2>検索 / フィルター</h2>
+        <div class="search-row">
+          <input type="text" id="search-input" placeholder="施設名で検索…">
+          <button class="search-clear" id="search-clear" title="クリア" style="display:none">×</button>
+        </div>
+        <div class="filter-chips" id="filter-chips"></div>
+        <div class="filter-actions">
+          <button id="filter-all">全選択</button>
+          <button id="filter-none">全解除</button>
+        </div>
+      </div>
+
+      <div class="sidebar-section" style="padding-bottom: 6px;">
+        <h2>登録済み (<span id="marker-count">0</span> / <span id="marker-total">0</span>)</h2>
+      </div>
+      <div class="marker-list" id="marker-list">
+        <div class="marker-list-empty">まだ施設はありません</div>
+      </div>
+    </div>
+
+    <!-- ===== Routes panel ===== -->
+    <div class="sidebar-panel" id="panel-routes" hidden>
+      <div class="sidebar-section">
+        <h2 id="route-form-title">ルートを追加</h2>
+        <form id="route-form">
+          <div class="form-row">
+            <label>ルート名</label>
+            <input type="text" id="r-name" maxlength="40" required placeholder="例: 拠点 → 海底神殿">
+          </div>
+          <div class="form-row">
+            <label>色</label>
+            <div class="color-palette" id="r-color-palette"></div>
+            <input type="hidden" id="r-color" value="#4a7eff">
+          </div>
+          <div class="form-row">
+            <label id="r-points-label">点 (0)</label>
+            <div style="font-size:12px;color:#8b94a3;margin-top:4px;">
+              「🛤️ ルート作成」を押すとマップ上のクリックで点を追加できます。
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-secondary" id="route-add-points">🛤️ マップで点追加</button>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="route-submit">追加</button>
+            <button type="button" class="btn btn-secondary" id="route-cancel" style="display:none">取消</button>
+            <button type="button" class="btn btn-danger" id="route-delete" style="display:none">削除</button>
+          </div>
+        </form>
+      </div>
+      <div class="sidebar-section" style="padding-bottom: 6px;">
+        <h2>登録済みルート (<span id="route-count">0</span>)</h2>
+      </div>
+      <div class="route-list" id="route-list">
+        <div class="route-list-empty">まだルートはありません</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Background config modal ===== -->
+<div class="modal-overlay" id="bg-modal">
+  <div class="modal">
+    <h2>背景マップ (バイオーム画像)</h2>
+    <p style="font-size:12px;color:#8b94a3;margin:0 0 8px;">
+      ディメンション <b id="bg-dim-label"></b> の背景画像を設定します。設定はFirebase経由で全員に同期されます。
+    </p>
+
+    <h3>1. Chunkbaseで画像を出力</h3>
+    <ol style="margin:6px 0;padding-left:22px;">
+      <li><a href="https://www.chunkbase.com/apps/biome-finder" target="_blank">Chunkbase Biome Finder</a> を開く</li>
+      <li>シードを入力 (例: <code id="bg-seed-hint">5492515056883084598</code>)</li>
+      <li>表示したい範囲にズーム → 右上の Download/Save で PNG 保存</li>
+      <li>そのPNGを <code>index.html</code> と同じフォルダに置く (例: <code>biome-overworld.png</code>)</li>
+      <li>表示中の座標範囲をメモ (左下/右上のXZ)</li>
+    </ol>
+
+    <h3>2. 設定</h3>
+    <div class="bg-form-row">
+      <label class="checkbox-label"><input type="checkbox" id="bg-visible"> 背景を表示する</label>
+    </div>
+    <div class="bg-form-row">
+      <label>画像URL (相対パスでOK)</label>
+      <input type="text" id="bg-url" placeholder="biome-overworld.png">
+    </div>
+    <div class="bg-form-grid">
+      <div class="bg-form-row">
+        <label>左上 X (xMin)</label>
+        <input type="number" id="bg-xmin" step="1" placeholder="-2000">
+      </div>
+      <div class="bg-form-row">
+        <label>左上 Z (zMin)</label>
+        <input type="number" id="bg-zmin" step="1" placeholder="-2000">
+      </div>
+      <div class="bg-form-row">
+        <label>右下 X (xMax)</label>
+        <input type="number" id="bg-xmax" step="1" placeholder="2000">
+      </div>
+      <div class="bg-form-row">
+        <label>右下 Z (zMax)</label>
+        <input type="number" id="bg-zmax" step="1" placeholder="2000">
+      </div>
+    </div>
+    <div class="bg-form-row">
+      <label>不透明度</label>
+      <div class="bg-opacity-row">
+        <input type="range" id="bg-opacity" min="0" max="100" step="5" value="70">
+        <span class="opacity-val" id="bg-opacity-val">70%</span>
+      </div>
+    </div>
+
+    <div class="modal-close-row" style="gap:8px;">
+      <button class="btn btn-secondary" id="bg-cancel" style="flex:none;padding:8px 16px;">キャンセル</button>
+      <button class="btn btn-primary" id="bg-save" style="flex:none;padding:8px 24px;">保存して全員に反映</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Data IO modal ===== -->
+<div class="modal-overlay" id="data-modal">
+  <div class="modal">
+    <h2>データのエクスポート / インポート</h2>
+
+    <h3>エクスポート</h3>
+    <p>現在の部屋の全ディメンションの施設・ルートをJSONで保存します。</p>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-primary" id="data-export" style="flex:none;padding:8px 18px;">📥 JSONをダウンロード</button>
+      <button class="btn btn-secondary" id="data-export-copy" style="flex:none;padding:8px 18px;">📋 クリップボードにコピー</button>
+    </div>
+
+    <h3>インポート</h3>
+    <p>JSONファイルを読み込むか、テキストを貼り付けて取り込みます。</p>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <input type="file" id="data-file" accept="application/json,.json" style="font-size:12px;color:#b8c2d4;">
+      <label class="checkbox-label" style="font-size:12px;"><input type="checkbox" id="data-replace"> 置き換え（チェック無しなら統合）</label>
+    </div>
+    <div class="form-row" style="margin-top:8px;">
+      <label>または直接貼り付け</label>
+      <textarea id="data-paste" rows="6" placeholder='{"version":1,"dimensions":{...}}'></textarea>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;">
+      <button class="btn btn-secondary" id="data-cancel" style="flex:none;padding:8px 16px;">閉じる</button>
+      <button class="btn btn-primary" id="data-import" style="flex:none;padding:8px 24px;">取り込み実行</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Help / setup modal ===== -->
+<div class="modal-overlay" id="help-modal">
+  <div class="modal">
+    <h2>セットアップと使い方</h2>
+
+    <h3>使い方</h3>
+    <ul>
+      <li>右側のフォームに名前・座標を入れて「追加」</li>
+      <li>マップ上の点をクリックで選択 → 編集・削除</li>
+      <li>マップをドラッグでスクロール、ホイールでズーム</li>
+      <li>マップ上を <b>ダブルクリック</b> でその座標に新規追加</li>
+      <li>ピンを <b>ドラッグ</b> で座標を直接修正できます (移動後にFirebaseへ保存)</li>
+      <li>変更は自動でFirebaseに保存され全員に同期</li>
+    </ul>
+
+    <h3>ツール</h3>
+    <ul>
+      <li><b>📏 距離計測</b>: 2点クリックで直線距離を表示。OWではネザー換算 (÷8) も表示</li>
+      <li><b>🛤️ ルート作成</b>: クリックで点を追加、Enter/完了で保存。鉄道や道筋の可視化に</li>
+      <li>Esc キーで現在のツールを終了</li>
+    </ul>
+
+    <h3>検索 / フィルター</h3>
+    <p>サイドバー上部の検索ボックスで施設名検索。カテゴリのチップでON/OFF切替できます。条件外のピンはマップ上で薄く表示されます。</p>
+
+    <h3>ディメンション切替</h3>
+    <p>上部のタブで「オーバーワールド / ネザー / エンド」を切り替え。施設・ルートはディメンションごとに別々に保存されます。</p>
+    <p>💡 ネザー座標の換算: <code>オーバーワールド座標 ÷ 8 ≒ ネザー座標</code> (Y座標はそのまま)</p>
+    <p>カテゴリを「ポータル」にすると対応ディメンションでの座標を自動提案します。「リンク先を追加」で逆側にも自動作成。</p>
+
+    <h3>バイオーム背景</h3>
+    <p>上部の 🗺️ ボタンから設定。<a href="https://www.chunkbase.com/apps/biome-finder" target="_blank">Chunkbase Biome Finder</a> でシード <code>5492515056883084598</code> を入力 → 表示範囲のPNGを保存 → 画像URLと座標範囲を入力すると背景に重なります。</p>
+
+    <h3>データ管理</h3>
+    <p>📁 ボタンからJSONエクスポート/インポート。Firebase 障害時のバックアップや、別の部屋へのコピーに使えます。</p>
+
+    <h3>部屋を分ける</h3>
+    <p>URLの末尾に <code>#room=部屋名</code> を付けると別マップになります。例: <code>...index.html#room=mansion</code></p>
+
+    <h3>初回ホスト側セットアップ (1回のみ)</h3>
+    <ol>
+      <li><a href="https://console.firebase.google.com/" target="_blank">Firebase Console</a> でプロジェクト作成</li>
+      <li>左メニューの「Realtime Database」→ 作成 (テストモードでOK)</li>
+      <li>プロジェクト設定 → ウェブアプリ追加 → <code>firebaseConfig</code> をコピー</li>
+      <li>このHTMLの先頭の <code>const firebaseConfig = {…}</code> を貼り替え</li>
+      <li>HTMLを GitHub Pages / Netlify / Firebase Hosting 等に配置</li>
+      <li>そのURLをDiscordで共有 → 友人は開くだけで使えます</li>
+    </ol>
+    <h3>Realtime Database のセキュリティルール例</h3>
+    <pre>{
+  "rules": {
+    ".read": true,
+    ".write": true
+  }
+}</pre>
+    <p style="color:#d2a06c;">⚠ 上記は誰でも書き込み可能です。URLが流出すると荒らされる可能性があります。心配なら Firebase Authentication の匿名認証 + auth != null ルールに変更してください。</p>
+
+    <div class="modal-close-row">
+      <button class="btn btn-primary" id="help-close" style="flex: none; padding: 8px 24px;">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+/* =============================================================
+ * Firebase 設定 (ホストが1回だけ書き換える)
+ * ============================================================= */
+const firebaseConfig = {
+  apiKey: "AIzaSyDow-kLH3b2q1xqlpI3mS9aCtex1KC0NY8",
+  authDomain: "tsurumerumap.firebaseapp.com",
+  databaseURL: "https://tsurumerumap-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "tsurumerumap",
+  storageBucket: "tsurumerumap.firebasestorage.app",
+  messagingSenderId: "340140520891",
+  appId: "1:340140520891:web:2ae44b8a9c95b96becc09e",
+  measurementId: "G-2EJZ9C6B9R"
+};
+
+/* =============================================================
+ * ディメンション定義
+ * ============================================================= */
+const DIMENSIONS = [
+  { id: 'overworld', label: 'オーバーワールド', icon: '🌳', bg: '#0f1218', grid: '#1c2230', axis: '#3a4a6e' },
+  { id: 'nether',    label: 'ネザー',           icon: '🔥', bg: '#1a0e0e', grid: '#3a1c1c', axis: '#6e3a3a' },
+  { id: 'end',       label: 'エンド',           icon: '🌌', bg: '#120e1a', grid: '#241c33', axis: '#4e3a6e' },
+];
+const dimById = id => DIMENSIONS.find(d => d.id === id) || DIMENSIONS[0];
+
+/* =============================================================
+ * カテゴリ定義
+ * ============================================================= */
+const CATEGORIES = [
+  { id: 'home',    label: '拠点',     icon: '🏠', color: '#4a7eff' },
+  { id: 'farm',    label: '農場',     icon: '🌾', color: '#6cd293' },
+  { id: 'mine',    label: '採掘',     icon: '⛏️', color: '#d2a06c' },
+  { id: 'portal',  label: 'ポータル', icon: '🌀', color: '#c66cd2' },
+  { id: 'village', label: '村/構造物', icon: '🏛️', color: '#d2c66c' },
+  { id: 'mob',     label: 'モブ拠点', icon: '👹', color: '#d26c6c' },
+  { id: 'other',   label: 'その他',   icon: '📍', color: '#8b94a3' },
+];
+const catById = id => CATEGORIES.find(c => c.id === id) || CATEGORIES[CATEGORIES.length - 1];
+
+const ROUTE_COLORS = ['#4a7eff', '#6cd293', '#d2a06c', '#c66cd2', '#d2c66c', '#d26c6c', '#8b94a3', '#ffffff'];
+
+/* =============================================================
+ * 状態
+ * ============================================================= */
+const STORAGE_KEY = 'mc_shared_map_v1';
+const state = {
+  markers: new Map(),       // 現在ディメンションのみ
+  routes: new Map(),        // 現在ディメンションのみ
+  selectedId: null,
+  selectedRouteId: null,
+  hoverId: null,
+  username: '',
+  roomId: '',
+  dimension: 'overworld',
+  views: {
+    overworld: { cx: 0, cz: 0, scale: 2 },
+    nether:    { cx: 0, cz: 0, scale: 4 },
+    end:       { cx: 0, cz: 0, scale: 2 },
+  },
+  backgrounds: {
+    overworld: { url: '', xMin: -2000, zMin: -2000, xMax: 2000, zMax: 2000, opacity: 0.7, visible: false },
+    nether:    { url: '', xMin: -250,  zMin: -250,  xMax: 250,  zMax: 250,  opacity: 0.7, visible: false },
+    end:       { url: '', xMin: -2000, zMin: -2000, xMax: 2000, zMax: 2000, opacity: 0.7, visible: false },
+  },
+  bgImages: { overworld: null, nether: null, end: null },
+  filter: { query: '', categories: new Set(CATEGORIES.map(c => c.id)) },
+  tool: 'select',           // 'select' | 'distance' | 'route'
+  distance: { from: null, to: null },
+  routeDraft: null,         // 編集/作成中のルート: {id?, name, color, points: [{x,z}]}
+  sidebarTab: 'markers',    // 'markers' | 'routes'
+  // ドラッグ系の一時状態
+  panState: null,
+  pinDragState: null,
+};
+const view = () => state.views[state.dimension];
+const bgConf = () => state.backgrounds[state.dimension];
+
+/* =============================================================
+ * DOM 参照
+ * ============================================================= */
+const $ = id => document.getElementById(id);
+const canvas = $('map');
+const ctx = canvas.getContext('2d');
+const coordDisplay = $('coord-display');
+const roomLabel = $('room-label');
+const usernameInput = $('username-input');
+const connStatus = $('conn-status');
+const markerList = $('marker-list');
+const markerCount = $('marker-count');
+const markerTotal = $('marker-total');
+const formTitle = $('form-title');
+const fName = $('f-name');
+const fX = $('f-x'), fY = $('f-y'), fZ = $('f-z');
+const fCategory = $('f-category');
+const fNote = $('f-note');
+const submitBtn = $('submit-btn');
+const cancelBtn = $('cancel-btn');
+const deleteBtn = $('delete-btn');
+const markerForm = $('marker-form');
+const legend = $('legend');
+const helpModal = $('help-modal');
+const portalHint = $('portal-hint');
+const sidebarEl = $('sidebar');
+const sidebarOverlay = $('sidebar-overlay');
+const toolBanner = $('tool-banner');
+const searchInput = $('search-input');
+const searchClear = $('search-clear');
+const filterChips = $('filter-chips');
+const routeList = $('route-list');
+const routeCount = $('route-count');
+const routeForm = $('route-form');
+const rName = $('r-name');
+const rColor = $('r-color');
+const rColorPalette = $('r-color-palette');
+const rPointsLabel = $('r-points-label');
+const routeFormTitle = $('route-form-title');
+const routeSubmit = $('route-submit');
+const routeCancel = $('route-cancel');
+const routeDelete = $('route-delete');
+
+/* =============================================================
+ * ユーティリティ
+ * ============================================================= */
+const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, m => (
+  { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]
+));
+const uid = () => 'm_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const formatTime = ts => {
+  if (!ts) return '';
+  const d = new Date(ts);
+  const now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  if (sameDay) return d.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleDateString('ja-JP', { month: '2-digit', day: '2-digit' });
+};
+const fmtCoord = n => Number.isInteger(n) ? String(n) : n.toFixed(1);
+
+/* =============================================================
+ * ローカル設定
+ * ============================================================= */
+function loadLocal() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const data = JSON.parse(raw);
+      state.username = data.username || '';
+      if (data.dimension && DIMENSIONS.some(d => d.id === data.dimension)) state.dimension = data.dimension;
+      if (data.views) {
+        for (const k of Object.keys(state.views)) {
+          if (data.views[k]) Object.assign(state.views[k], data.views[k]);
+        }
+      }
+      if (Array.isArray(data.filterCategories)) {
+        state.filter.categories = new Set(data.filterCategories);
+      }
+    }
+  } catch {}
+  if (!state.username) state.username = '名無しさん' + Math.floor(Math.random() * 1000);
+}
+function saveLocal() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      username: state.username,
+      dimension: state.dimension,
+      views: state.views,
+      filterCategories: Array.from(state.filter.categories),
+    }));
+  } catch {}
+}
+
+/* =============================================================
+ * URL ハッシュから部屋ID
+ * ============================================================= */
+function getRoomFromHash() {
+  const m = location.hash.match(/room=([^&]+)/);
+  return m ? decodeURIComponent(m[1]) : 'default';
+}
+
+/* =============================================================
+ * Firebase 接続
+ * ============================================================= */
+let db = null;
+let dbMod = null;
+let unsubscribeMarkers = null;
+let unsubscribeRoutes = null;
+let unsubscribeBg = null;
+let fb = null;
+
+async function initFirebase() {
+  if (firebaseConfig.apiKey === 'YOUR_API_KEY') {
+    setStatus('warn', 'Firebase未設定');
+    return false;
+  }
+  try {
+    const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
+    dbMod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js');
+    const app = initializeApp(firebaseConfig);
+    db = dbMod.getDatabase(app);
+    subscribeDimension();
+    return true;
+  } catch (e) {
+    console.error(e);
+    setStatus('err', '接続失敗');
+    return false;
+  }
+}
+
+function markersPath(dim = state.dimension) { return `maps/${state.roomId}/${dim}/markers`; }
+function routesPath(dim = state.dimension)  { return `maps/${state.roomId}/${dim}/routes`; }
+function backgroundPath(dim = state.dimension) { return `maps/${state.roomId}/${dim}/background`; }
+
+function subscribeDimension() {
+  if (!db || !dbMod) return;
+  if (unsubscribeMarkers) { unsubscribeMarkers(); unsubscribeMarkers = null; }
+  if (unsubscribeRoutes)  { unsubscribeRoutes();  unsubscribeRoutes = null; }
+  if (unsubscribeBg)      { unsubscribeBg();      unsubscribeBg = null; }
+  state.markers.clear();
+  state.routes.clear();
+  state.selectedId = null;
+  state.selectedRouteId = null;
+  setStatus('warn', '読み込み中…');
+
+  const mRef = dbMod.ref(db, markersPath());
+  unsubscribeMarkers = dbMod.onValue(mRef, snap => {
+    const val = snap.val() || {};
+    state.markers.clear();
+    Object.entries(val).forEach(([id, m]) => state.markers.set(id, { id, ...m }));
+    renderMarkerList();
+    draw();
+    setStatus('ok', '同期中');
+  }, err => { console.error(err); setStatus('err', '同期エラー'); });
+
+  const rRef = dbMod.ref(db, routesPath());
+  unsubscribeRoutes = dbMod.onValue(rRef, snap => {
+    const val = snap.val() || {};
+    state.routes.clear();
+    Object.entries(val).forEach(([id, r]) => state.routes.set(id, { id, ...r }));
+    renderRouteList();
+    draw();
+  }, err => console.error(err));
+
+  const bgRef = dbMod.ref(db, backgroundPath());
+  unsubscribeBg = dbMod.onValue(bgRef, snap => {
+    const val = snap.val();
+    if (val) {
+      Object.assign(state.backgrounds[state.dimension], val);
+      loadBackgroundImage(state.dimension);
+    }
+    draw();
+  }, err => console.error(err));
+
+  fb = {
+    addMarker:    (id, data) => dbMod.set(dbMod.ref(db, `${markersPath()}/${id}`), data),
+    updateMarker: (id, data) => dbMod.update(dbMod.ref(db, `${markersPath()}/${id}`), data),
+    removeMarker: (id)       => dbMod.remove(dbMod.ref(db, `${markersPath()}/${id}`)),
+    // ディメンション指定可能版 (ポータル連携用)
+    addMarkerIn: (dim, id, data) => dbMod.set(dbMod.ref(db, `${markersPath(dim)}/${id}`), data),
+
+    addRoute:    (id, data) => dbMod.set(dbMod.ref(db, `${routesPath()}/${id}`), data),
+    updateRoute: (id, data) => dbMod.update(dbMod.ref(db, `${routesPath()}/${id}`), data),
+    removeRoute: (id)       => dbMod.remove(dbMod.ref(db, `${routesPath()}/${id}`)),
+
+    saveBackground: (cfg) => dbMod.set(dbMod.ref(db, backgroundPath()), cfg),
+
+    // 全ディメンション一括取得 (export 用)
+    fetchAll: async () => {
+      const out = {};
+      for (const d of DIMENSIONS) {
+        const ms = (await dbMod.get(dbMod.ref(db, markersPath(d.id)))).val() || {};
+        const rs = (await dbMod.get(dbMod.ref(db, routesPath(d.id)))).val() || {};
+        out[d.id] = { markers: ms, routes: rs };
+      }
+      return out;
+    },
+    // 一括書き込み (import 用)
+    writeAll: async (data, replace) => {
+      for (const d of DIMENSIONS) {
+        const dimData = data[d.id];
+        if (!dimData) continue;
+        if (replace) {
+          await dbMod.set(dbMod.ref(db, markersPath(d.id)), dimData.markers || null);
+          await dbMod.set(dbMod.ref(db, routesPath(d.id)),  dimData.routes  || null);
+        } else {
+          if (dimData.markers) await dbMod.update(dbMod.ref(db, markersPath(d.id)), dimData.markers);
+          if (dimData.routes)  await dbMod.update(dbMod.ref(db, routesPath(d.id)),  dimData.routes);
+        }
+      }
+    },
+  };
+}
+
+function loadBackgroundImage(dimId) {
+  const cfg = state.backgrounds[dimId];
+  if (!cfg.url) { state.bgImages[dimId] = null; return; }
+  const cached = state.bgImages[dimId];
+  if (cached && cached.dataset.src === cfg.url) return;
+  const img = new Image();
+  img.dataset.src = cfg.url;
+  img.crossOrigin = 'anonymous';
+  img.onload = () => { state.bgImages[dimId] = img; draw(); };
+  img.onerror = () => { console.warn('背景画像の読込失敗:', cfg.url); state.bgImages[dimId] = null; draw(); };
+  img.src = cfg.url;
+}
+
+function setStatus(kind, text) {
+  connStatus.className = 'status ' + kind;
+  connStatus.textContent = text;
+}
+
+/* =============================================================
+ * カテゴリ / ディメンション / フィルター UI
+ * ============================================================= */
+function buildCategoryUI() {
+  fCategory.innerHTML = CATEGORIES.map(c =>
+    `<option value="${c.id}">${c.icon} ${c.label}</option>`
+  ).join('');
+  legend.innerHTML = CATEGORIES.map(c =>
+    `<div class="legend-item"><span class="legend-dot" style="background:${c.color}"></span>${c.icon} ${c.label}</div>`
+  ).join('');
+  filterChips.innerHTML = CATEGORIES.map(c =>
+    `<button type="button" class="filter-chip" data-id="${c.id}"><span style="color:${c.color}">${c.icon}</span> ${c.label}</button>`
+  ).join('');
+  filterChips.querySelectorAll('.filter-chip').forEach(el => {
+    el.addEventListener('click', () => toggleFilterCategory(el.dataset.id));
+  });
+  updateFilterChips();
+}
+
+function buildRouteColorPalette() {
+  rColorPalette.innerHTML = ROUTE_COLORS.map(c =>
+    `<div class="color-swatch" data-color="${c}" style="background:${c}"></div>`
+  ).join('');
+  rColorPalette.querySelectorAll('.color-swatch').forEach(el => {
+    el.addEventListener('click', () => {
+      rColor.value = el.dataset.color;
+      updateRouteColorActive();
+    });
+  });
+  updateRouteColorActive();
+}
+function updateRouteColorActive() {
+  rColorPalette.querySelectorAll('.color-swatch').forEach(el => {
+    el.classList.toggle('active', el.dataset.color === rColor.value);
+  });
+}
+
+function buildDimensionTabs() {
+  const wrap = $('dim-tabs');
+  wrap.innerHTML = DIMENSIONS.map(d =>
+    `<button class="dim-tab dim-${d.id}" data-id="${d.id}"><span class="dim-icon">${d.icon}</span>${d.label}</button>`
+  ).join('');
+  wrap.querySelectorAll('.dim-tab').forEach(el => {
+    el.addEventListener('click', () => switchDimension(el.dataset.id));
+  });
+  updateDimensionTabs();
+}
+function updateDimensionTabs() {
+  document.querySelectorAll('#dim-tabs .dim-tab').forEach(el => {
+    el.classList.toggle('active', el.dataset.id === state.dimension);
+  });
+}
+function switchDimension(id) {
+  if (id === state.dimension) return;
+  if (!DIMENSIONS.some(d => d.id === id)) return;
+  cancelTool();
+  state.dimension = id;
+  clearSelection();
+  clearRouteSelection();
+  updateDimensionTabs();
+  saveLocal();
+  if (fb) {
+    subscribeDimension();
+  } else {
+    state.markers.clear();
+    state.routes.clear();
+    state.selectedId = null;
+    state.selectedRouteId = null;
+    renderMarkerList();
+    renderRouteList();
+  }
+  draw();
+}
+
+function toggleFilterCategory(id) {
+  const set = state.filter.categories;
+  if (set.has(id)) set.delete(id); else set.add(id);
+  saveLocal();
+  updateFilterChips();
+  renderMarkerList();
+  draw();
+}
+function updateFilterChips() {
+  filterChips.querySelectorAll('.filter-chip').forEach(el => {
+    el.classList.toggle('active', state.filter.categories.has(el.dataset.id));
+  });
+}
+function setAllCategories(allOn) {
+  state.filter.categories = new Set(allOn ? CATEGORIES.map(c => c.id) : []);
+  saveLocal();
+  updateFilterChips();
+  renderMarkerList();
+  draw();
+}
+$('filter-all').onclick = () => setAllCategories(true);
+$('filter-none').onclick = () => setAllCategories(false);
+
+searchInput.addEventListener('input', () => {
+  state.filter.query = searchInput.value.trim().toLowerCase();
+  searchClear.style.display = state.filter.query ? '' : 'none';
+  renderMarkerList();
+  draw();
+});
+searchClear.onclick = () => { searchInput.value = ''; state.filter.query = ''; searchClear.style.display = 'none'; renderMarkerList(); draw(); };
+
+function matchesFilter(m) {
+  if (!state.filter.categories.has(m.category || 'other')) return false;
+  if (state.filter.query) {
+    const hay = (m.name || '').toLowerCase() + ' ' + (m.note || '').toLowerCase();
+    if (!hay.includes(state.filter.query)) return false;
+  }
+  return true;
+}
+
+/* =============================================================
+ * 座標変換
+ * ============================================================= */
+function w2s(x, z) {
+  const r = canvas.getBoundingClientRect();
+  const v = view();
+  return { sx: (x - v.cx) * v.scale + r.width / 2, sy: (z - v.cz) * v.scale + r.height / 2 };
+}
+function s2w(sx, sy) {
+  const r = canvas.getBoundingClientRect();
+  const v = view();
+  return { x: (sx - r.width / 2) / v.scale + v.cx, z: (sy - r.height / 2) / v.scale + v.cz };
+}
+
+/* =============================================================
+ * 描画
+ * ============================================================= */
+function resizeCanvas() {
+  const r = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = r.width * dpr;
+  canvas.height = r.height * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  draw();
+}
+
+function draw() {
+  const r = canvas.getBoundingClientRect();
+  const W = r.width, H = r.height;
+  const dim = dimById(state.dimension);
+  ctx.fillStyle = dim.bg;
+  ctx.fillRect(0, 0, W, H);
+  drawBiomeImage();
+  drawGrid(W, H, dim);
+  drawAxes(W, H, dim);
+  drawRoutes();
+  drawRouteDraft();
+  drawMarkers();
+  drawDistance();
+}
+
+function drawBiomeImage() {
+  const cfg = bgConf();
+  const img = state.bgImages[state.dimension];
+  if (!cfg || !cfg.visible || !img) return;
+  const tl = w2s(cfg.xMin, cfg.zMin);
+  const br = w2s(cfg.xMax, cfg.zMax);
+  const w = br.sx - tl.sx, h = br.sy - tl.sy;
+  if (w <= 0 || h <= 0) return;
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, Math.min(1, cfg.opacity ?? 0.7));
+  ctx.imageSmoothingEnabled = view().scale < 4;
+  ctx.drawImage(img, tl.sx, tl.sy, w, h);
+  ctx.restore();
+}
+
+function drawGrid(W, H, dim) {
+  const scale = view().scale;
+  let step = 16;
+  while (step * scale < 40) step *= 4;
+  while (step * scale > 200) step = Math.max(1, step / 4);
+  const tl = s2w(0, 0);
+  const br = s2w(W, H);
+  const x0 = Math.floor(tl.x / step) * step;
+  const x1 = Math.ceil(br.x / step) * step;
+  const z0 = Math.floor(tl.z / step) * step;
+  const z1 = Math.ceil(br.z / step) * step;
+  ctx.strokeStyle = dim.grid;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let x = x0; x <= x1; x += step) {
+    const { sx } = w2s(x, 0);
+    ctx.moveTo(sx, 0); ctx.lineTo(sx, H);
+  }
+  for (let z = z0; z <= z1; z += step) {
+    const { sy } = w2s(0, z);
+    ctx.moveTo(0, sy); ctx.lineTo(W, sy);
+  }
+  ctx.stroke();
+  ctx.fillStyle = '#3b4252';
+  ctx.font = '10px ui-monospace, monospace';
+  ctx.textBaseline = 'top';
+  for (let x = x0; x <= x1; x += step) {
+    const { sx } = w2s(x, 0);
+    if (sx > 30 && sx < W - 30) ctx.fillText(String(x), sx + 2, 2);
+  }
+  ctx.textBaseline = 'alphabetic';
+  for (let z = z0; z <= z1; z += step) {
+    const { sy } = w2s(0, z);
+    if (sy > 14 && sy < H - 6) ctx.fillText(String(z), 2, sy - 2);
+  }
+}
+
+function drawAxes(W, H, dim) {
+  const o = w2s(0, 0);
+  ctx.strokeStyle = dim.axis;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  if (o.sy >= 0 && o.sy <= H) { ctx.moveTo(0, o.sy); ctx.lineTo(W, o.sy); }
+  if (o.sx >= 0 && o.sx <= W) { ctx.moveTo(o.sx, 0); ctx.lineTo(o.sx, H); }
+  ctx.stroke();
+}
+
+function drawRoutes() {
+  for (const r of state.routes.values()) {
+    drawRoutePolyline(r.points || [], r.color || '#4a7eff', r.id === state.selectedRouteId, r.name);
+  }
+}
+function drawRoutePolyline(points, color, selected, label) {
+  if (!points || points.length < 1) return;
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = selected ? 4 : 3;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  if (selected) {
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 10;
+  }
+  ctx.beginPath();
+  points.forEach((p, i) => {
+    const { sx, sy } = w2s(p.x, p.z);
+    if (i === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+  });
+  ctx.stroke();
+  ctx.restore();
+  // route point dots
+  ctx.fillStyle = color;
+  for (const p of points) {
+    const { sx, sy } = w2s(p.x, p.z);
+    ctx.beginPath();
+    ctx.arc(sx, sy, selected ? 4 : 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // label at first point
+  if (label && points.length > 0 && selected) {
+    const { sx, sy } = w2s(points[0].x, points[0].z);
+    ctx.font = 'bold 11px -apple-system, "Hiragino Sans", "Yu Gothic UI", sans-serif';
+    const tw = ctx.measureText(label).width;
+    ctx.fillStyle = 'rgba(17,20,26,0.85)';
+    ctx.fillRect(sx - tw / 2 - 4, sy - 22, tw + 8, 16);
+    ctx.fillStyle = color;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, sx, sy - 14);
+  }
+}
+function drawRouteDraft() {
+  if (!state.routeDraft) return;
+  drawRoutePolyline(state.routeDraft.points, state.routeDraft.color, true, state.routeDraft.name || '(新規ルート)');
+  // draft hint: dashed line from last point to mouse
+  if (state.routeDraft.cursorPos && state.routeDraft.points.length > 0) {
+    const last = state.routeDraft.points[state.routeDraft.points.length - 1];
+    const a = w2s(last.x, last.z);
+    const b = w2s(state.routeDraft.cursorPos.x, state.routeDraft.cursorPos.z);
+    ctx.save();
+    ctx.strokeStyle = state.routeDraft.color;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+function drawMarkers() {
+  const arr = Array.from(state.markers.values());
+  // sort: matching -> non-matching first; selected/hovered last for top draw
+  arr.sort((a, b) => {
+    const am = matchesFilter(a) ? 1 : 0, bm = matchesFilter(b) ? 1 : 0;
+    if (am !== bm) return am - bm;
+    const aa = (a.id === state.selectedId ? 2 : 0) + (a.id === state.hoverId ? 1 : 0);
+    const bb = (b.id === state.selectedId ? 2 : 0) + (b.id === state.hoverId ? 1 : 0);
+    return aa - bb;
+  });
+  ctx.font = '12px -apple-system, "Hiragino Sans", "Yu Gothic UI", sans-serif';
+  ctx.textBaseline = 'middle';
+  for (const m of arr) {
+    const cat = catById(m.category);
+    let drawX = m.x, drawZ = m.z;
+    // ピンドラッグ中はその位置で描画
+    if (state.pinDragState && state.pinDragState.id === m.id && state.pinDragState.dragging) {
+      drawX = state.pinDragState.x;
+      drawZ = state.pinDragState.z;
+    }
+    const { sx, sy } = w2s(drawX, drawZ);
+    const isSel = m.id === state.selectedId;
+    const isHover = m.id === state.hoverId;
+    const matched = matchesFilter(m);
+    const r = isSel ? 9 : (isHover ? 8 : 7);
+
+    ctx.save();
+    if (!matched) ctx.globalAlpha = 0.25;
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.beginPath(); ctx.arc(sx + 1, sy + 1, r, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = cat.color;
+    ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = isSel ? '#ffffff' : (isHover ? '#e6e8eb' : '#11141a');
+    ctx.lineWidth = isSel ? 2.5 : 1.5;
+    ctx.stroke();
+
+    const label = m.name || '(無題)';
+    ctx.font = (isSel ? 'bold 12px ' : '12px ') + '-apple-system, "Hiragino Sans", "Yu Gothic UI", sans-serif';
+    const tw = ctx.measureText(label).width;
+    const lx = sx + r + 4, ly = sy;
+    ctx.fillStyle = 'rgba(17,20,26,0.85)';
+    ctx.fillRect(lx - 3, ly - 9, tw + 6, 18);
+    ctx.fillStyle = isSel ? '#ffffff' : '#e6e8eb';
+    ctx.textAlign = 'left';
+    ctx.fillText(label, lx, ly);
+    ctx.restore();
+  }
+}
+
+function drawDistance() {
+  if (state.tool !== 'distance') return;
+  const { from, to } = state.distance;
+  if (!from) return;
+  const a = w2s(from.x, from.z);
+  ctx.save();
+  ctx.fillStyle = '#ffd84a';
+  ctx.beginPath(); ctx.arc(a.sx, a.sy, 5, 0, Math.PI * 2); ctx.fill();
+  if (to) {
+    const b = w2s(to.x, to.z);
+    ctx.strokeStyle = '#ffd84a';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#ffd84a';
+    ctx.beginPath(); ctx.arc(b.sx, b.sy, 5, 0, Math.PI * 2); ctx.fill();
+
+    // label at midpoint
+    const dx = to.x - from.x, dz = to.z - from.z;
+    const dist = Math.sqrt(dx*dx + dz*dz);
+    const mid = { sx: (a.sx + b.sx) / 2, sy: (a.sy + b.sy) / 2 };
+    let text = `${dist.toFixed(1)}m`;
+    if (state.dimension === 'overworld') {
+      text += ` (ネザー: ${(dist / 8).toFixed(1)}m)`;
+    } else if (state.dimension === 'nether') {
+      text += ` (OW: ${(dist * 8).toFixed(1)}m)`;
+    }
+    ctx.font = 'bold 12px -apple-system, "Hiragino Sans", "Yu Gothic UI", sans-serif';
+    const tw = ctx.measureText(text).width;
+    ctx.fillStyle = 'rgba(17,20,26,0.92)';
+    ctx.fillRect(mid.sx - tw/2 - 6, mid.sy - 10, tw + 12, 20);
+    ctx.fillStyle = '#ffd84a';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, mid.sx, mid.sy);
+  }
+  ctx.restore();
+}
+
+/* =============================================================
+ * ヒットテスト
+ * ============================================================= */
+function hitTestMarker(sx, sy) {
+  const arr = Array.from(state.markers.values());
+  for (let i = arr.length - 1; i >= 0; i--) {
+    const m = arr[i];
+    const p = w2s(m.x, m.z);
+    const dx = p.sx - sx, dy = p.sy - sy;
+    if (dx * dx + dy * dy <= 11 * 11) return m.id;
+  }
+  return null;
+}
+function hitTestRoute(sx, sy) {
+  // 線分への距離で判定 (画面座標で 6px 以内)
+  for (const r of state.routes.values()) {
+    const pts = r.points || [];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = w2s(pts[i].x, pts[i].z);
+      const b = w2s(pts[i+1].x, pts[i+1].z);
+      if (distToSegment(sx, sy, a.sx, a.sy, b.sx, b.sy) <= 6) return r.id;
+    }
+  }
+  return null;
+}
+function distToSegment(px, py, x1, y1, x2, y2) {
+  const dx = x2 - x1, dy = y2 - y1;
+  const len2 = dx*dx + dy*dy;
+  if (len2 === 0) return Math.hypot(px - x1, py - y1);
+  let t = ((px - x1) * dx + (py - y1) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (x1 + t*dx), py - (y1 + t*dy));
+}
+
+/* =============================================================
+ * ツール切替
+ * ============================================================= */
+function setTool(tool) {
+  cancelTool();
+  state.tool = tool;
+  canvas.classList.remove('tool-distance', 'tool-route');
+  document.querySelectorAll('.tools-overlay button').forEach(b => b.classList.remove('active'));
+  if (tool === 'distance') {
+    canvas.classList.add('tool-distance');
+    $('tool-distance').classList.add('active');
+    showBanner('📏 距離計測: 2点をクリック (Esc で終了)', () => cancelTool());
+  } else if (tool === 'route') {
+    canvas.classList.add('tool-route');
+    $('tool-route').classList.add('active');
+    if (!state.routeDraft) {
+      state.routeDraft = { id: null, name: rName.value.trim() || '', color: rColor.value, points: [] };
+    }
+    showBanner(`🛤️ ルート作成: クリックで点追加 (現在 <span id="route-pt-count">${state.routeDraft.points.length}</span> 点)`, () => finishRouteDraft(), '完了 (Enter)');
+    setSidebarTab('routes');
+  } else {
+    hideBanner();
+  }
+  draw();
+}
+function cancelTool() {
+  state.distance = { from: null, to: null };
+  state.tool = 'select';
+  canvas.classList.remove('tool-distance', 'tool-route');
+  document.querySelectorAll('.tools-overlay button').forEach(b => b.classList.remove('active'));
+  hideBanner();
+  // routeDraft は finishRouteDraft / cancelRouteDraft で扱う
+  draw();
+}
+function showBanner(html, onClick, btnText = '完了') {
+  toolBanner.innerHTML = `<span>${html}</span> <button>${btnText}</button>`;
+  toolBanner.querySelector('button').onclick = onClick;
+  toolBanner.hidden = false;
+}
+function hideBanner() { toolBanner.hidden = true; toolBanner.innerHTML = ''; }
+function updateRouteBannerCount() {
+  const el = toolBanner.querySelector('#route-pt-count');
+  if (el && state.routeDraft) el.textContent = state.routeDraft.points.length;
+  rPointsLabel.textContent = `点 (${state.routeDraft ? state.routeDraft.points.length : 0})`;
+}
+
+$('tool-distance').onclick = () => setTool(state.tool === 'distance' ? 'select' : 'distance');
+$('tool-route').onclick    = () => setTool(state.tool === 'route'    ? 'select' : 'route');
+
+window.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if (state.routeDraft) cancelRouteDraft();
+    cancelTool();
+  } else if (e.key === 'Enter' && state.tool === 'route') {
+    e.preventDefault();
+    finishRouteDraft();
+  }
+});
+
+/* =============================================================
+ * 入力 (ポインタイベント — マウス / タッチ統合)
+ * ============================================================= */
+const activePointers = new Map();
+let pinchInit = null;
+
+canvas.addEventListener('pointerdown', e => {
+  canvas.setPointerCapture(e.pointerId);
+  activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+  // 2本指: ピンチズーム開始
+  if (activePointers.size === 2) {
+    const [p1, p2] = Array.from(activePointers.values());
+    pinchInit = {
+      dist: Math.hypot(p1.x - p2.x, p1.y - p2.y),
+      mid: { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 },
+      scale: view().scale,
+      cx: view().cx, cz: view().cz,
+    };
+    state.panState = null;
+    return;
+  }
+
+  const r = canvas.getBoundingClientRect();
+  const sx = e.clientX - r.left, sy = e.clientY - r.top;
+
+  if (state.tool === 'distance') {
+    const w = s2w(sx, sy);
+    if (!state.distance.from || (state.distance.from && state.distance.to)) {
+      state.distance = { from: { x: w.x, z: w.z }, to: null };
+    } else {
+      state.distance.to = { x: w.x, z: w.z };
+    }
+    draw();
+    return;
+  }
+  if (state.tool === 'route') {
+    if (!state.routeDraft) state.routeDraft = { id: null, name: rName.value.trim() || '', color: rColor.value, points: [] };
+    // marker をクリックしたらその座標にスナップ
+    const mid = hitTestMarker(sx, sy);
+    let p;
+    if (mid) {
+      const m = state.markers.get(mid);
+      p = { x: m.x, z: m.z };
+    } else {
+      const w = s2w(sx, sy);
+      p = { x: Math.round(w.x), z: Math.round(w.z) };
+    }
+    state.routeDraft.points.push(p);
+    updateRouteBannerCount();
+    draw();
+    return;
+  }
+
+  // select tool
+  const mid = hitTestMarker(sx, sy);
+  if (mid) {
+    selectMarker(mid);
+    state.pinDragState = { id: mid, startSx: sx, startSy: sy, x: state.markers.get(mid).x, z: state.markers.get(mid).z, dragging: false };
+    return;
+  }
+  const rid = hitTestRoute(sx, sy);
+  if (rid) {
+    selectRoute(rid);
+    return;
+  }
+  const v = view();
+  state.panState = { sx, sy, cx: v.cx, cz: v.cz, moved: false };
+  canvas.classList.add('dragging');
+});
+
+canvas.addEventListener('pointermove', e => {
+  if (activePointers.has(e.pointerId)) activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+  // ピンチズーム中
+  if (pinchInit && activePointers.size >= 2) {
+    const [p1, p2] = Array.from(activePointers.values());
+    const dist = Math.hypot(p1.x - p2.x, p1.y - p2.y);
+    const factor = dist / pinchInit.dist;
+    const r = canvas.getBoundingClientRect();
+    const midSx = pinchInit.mid.x - r.left, midSy = pinchInit.mid.y - r.top;
+    const v = view();
+    const newScale = Math.max(0.05, Math.min(20, pinchInit.scale * factor));
+    // 中心を保持
+    const beforeWx = (midSx - r.width / 2) / pinchInit.scale + pinchInit.cx;
+    const beforeWz = (midSy - r.height / 2) / pinchInit.scale + pinchInit.cz;
+    v.scale = newScale;
+    const afterWx = (midSx - r.width / 2) / newScale + pinchInit.cx;
+    const afterWz = (midSy - r.height / 2) / newScale + pinchInit.cz;
+    v.cx = pinchInit.cx + (beforeWx - afterWx);
+    v.cz = pinchInit.cz + (beforeWz - afterWz);
+    draw();
+    return;
+  }
+
+  const r = canvas.getBoundingClientRect();
+  const sx = e.clientX - r.left, sy = e.clientY - r.top;
+
+  // ピンドラッグ
+  if (state.pinDragState) {
+    const ps = state.pinDragState;
+    const dx = sx - ps.startSx, dy = sy - ps.startSy;
+    if (!ps.dragging && (dx*dx + dy*dy) > 25) ps.dragging = true;
+    if (ps.dragging) {
+      const w = s2w(sx, sy);
+      ps.x = Math.round(w.x);
+      ps.z = Math.round(w.z);
+      draw();
+    }
+    return;
+  }
+
+  // パン
+  if (state.panState) {
+    const ps = state.panState;
+    const dx = sx - ps.sx, dy = sy - ps.sy;
+    if (Math.abs(dx) + Math.abs(dy) > 2) ps.moved = true;
+    const v = view();
+    v.cx = ps.cx - dx / v.scale;
+    v.cz = ps.cz - dy / v.scale;
+    draw();
+    return;
+  }
+
+  if (sx >= 0 && sx <= r.width && sy >= 0 && sy <= r.height) {
+    // hover とカーソル位置
+    const newHover = state.tool === 'select' ? hitTestMarker(sx, sy) : null;
+    if (newHover !== state.hoverId) {
+      state.hoverId = newHover;
+      if (state.tool === 'select') canvas.style.cursor = newHover ? 'pointer' : '';
+      draw();
+    }
+    const w = s2w(sx, sy);
+    coordDisplay.textContent = `x: ${Math.round(w.x)}, z: ${Math.round(w.z)}`;
+    // route draft cursor
+    if (state.tool === 'route' && state.routeDraft) {
+      state.routeDraft.cursorPos = { x: w.x, z: w.z };
+      draw();
+    }
+    // distance hover preview
+    if (state.tool === 'distance' && state.distance.from && !state.distance.to) {
+      // dynamic preview using cursor as 'to'
+      const old = state.distance.to;
+      state.distance.to = { x: w.x, z: w.z };
+      draw();
+      state.distance.to = old;  // reset (preview only)
+    }
+  }
+});
+
+canvas.addEventListener('pointerup', async e => {
+  activePointers.delete(e.pointerId);
+  if (activePointers.size < 2) pinchInit = null;
+  canvas.releasePointerCapture?.(e.pointerId);
+
+  if (state.pinDragState) {
+    const ps = state.pinDragState;
+    if (ps.dragging) {
+      // commit
+      const m = state.markers.get(ps.id);
+      if (m && (m.x !== ps.x || m.z !== ps.z)) {
+        const data = { x: ps.x, z: ps.z, updatedAt: Date.now(), updatedBy: state.username };
+        if (fb) {
+          try { await fb.updateMarker(ps.id, data); }
+          catch (err) { alert('座標更新に失敗しました: ' + err.message); }
+        } else {
+          state.markers.set(ps.id, { ...m, ...data });
+          renderMarkerList();
+        }
+        // 編集中なら座標欄も更新
+        if (state.selectedId === ps.id) {
+          fX.value = ps.x;
+          fZ.value = ps.z;
+          updatePortalHint();
+        }
+      }
+    }
+    state.pinDragState = null;
+    draw();
+    return;
+  }
+  if (state.panState) {
+    if (state.panState.moved) saveLocal();
+    state.panState = null;
+    canvas.classList.remove('dragging');
+  }
+});
+canvas.addEventListener('pointercancel', e => {
+  activePointers.delete(e.pointerId);
+  if (activePointers.size < 2) pinchInit = null;
+  state.pinDragState = null;
+  state.panState = null;
+  canvas.classList.remove('dragging');
+});
+
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const r = canvas.getBoundingClientRect();
+  const sx = e.clientX - r.left, sy = e.clientY - r.top;
+  const before = s2w(sx, sy);
+  const factor = e.deltaY < 0 ? 1.2 : 1 / 1.2;
+  const v = view();
+  v.scale = Math.max(0.05, Math.min(20, v.scale * factor));
+  const after = s2w(sx, sy);
+  v.cx += before.x - after.x;
+  v.cz += before.z - after.z;
+  saveLocal();
+  draw();
+}, { passive: false });
+
+canvas.addEventListener('dblclick', e => {
+  if (state.tool !== 'select') return;
+  const r = canvas.getBoundingClientRect();
+  const w = s2w(e.clientX - r.left, e.clientY - r.top);
+  state.selectedId = null;
+  fName.value = '';
+  fX.value = Math.round(w.x);
+  fZ.value = Math.round(w.z);
+  fY.value = '';
+  fNote.value = '';
+  fCategory.value = 'other';
+  setFormMode('add');
+  setSidebarTab('markers');
+  updatePortalHint();
+  fName.focus();
+});
+
+$('zoom-in').onclick = () => { const v = view(); v.scale = Math.min(20, v.scale * 1.4); saveLocal(); draw(); };
+$('zoom-out').onclick = () => { const v = view(); v.scale = Math.max(0.05, v.scale / 1.4); saveLocal(); draw(); };
+$('zoom-reset').onclick = () => {
+  const v = view();
+  v.cx = 0; v.cz = 0;
+  v.scale = state.dimension === 'nether' ? 4 : 2;
+  saveLocal(); draw();
+};
+
+/* =============================================================
+ * マーカー選択 / フォーム
+ * ============================================================= */
+function selectMarker(id) {
+  const m = state.markers.get(id);
+  if (!m) return;
+  state.selectedId = id;
+  state.selectedRouteId = null;
+  fName.value = m.name || '';
+  fX.value = m.x;
+  fY.value = m.y ?? '';
+  fZ.value = m.z;
+  fCategory.value = m.category || 'other';
+  fNote.value = m.note || '';
+  setFormMode('edit');
+  setSidebarTab('markers');
+  updatePortalHint();
+  renderMarkerList();
+  renderRouteList();
+  // center the view
+  const v = view();
+  v.cx = m.x; v.cz = m.z;
+  saveLocal();
+  draw();
+}
+function setFormMode(mode) {
+  if (mode === 'edit') {
+    formTitle.textContent = '施設を編集';
+    submitBtn.textContent = '更新';
+    cancelBtn.style.display = '';
+    deleteBtn.style.display = '';
+  } else {
+    formTitle.textContent = '施設を追加';
+    submitBtn.textContent = '追加';
+    cancelBtn.style.display = 'none';
+    deleteBtn.style.display = 'none';
+  }
+}
+function clearSelection() {
+  state.selectedId = null;
+  markerForm.reset();
+  fCategory.value = 'home';
+  setFormMode('add');
+  updatePortalHint();
+  renderMarkerList();
+  draw();
+}
+cancelBtn.onclick = clearSelection;
+
+deleteBtn.onclick = async () => {
+  if (!state.selectedId) return;
+  const m = state.markers.get(state.selectedId);
+  if (!m) return;
+  if (!confirm(`「${m.name}」を削除します。よろしいですか?`)) return;
+  if (fb) {
+    try { await fb.removeMarker(state.selectedId); }
+    catch (e) { alert('削除に失敗しました: ' + e.message); return; }
+  } else {
+    state.markers.delete(state.selectedId);
+  }
+  clearSelection();
+};
+
+markerForm.addEventListener('submit', async e => {
+  e.preventDefault();
+  const name = fName.value.trim();
+  const x = parseInt(fX.value, 10);
+  const z = parseInt(fZ.value, 10);
+  const yRaw = fY.value.trim();
+  const y = yRaw === '' ? null : parseInt(yRaw, 10);
+  if (!name || Number.isNaN(x) || Number.isNaN(z)) return;
+  const now = Date.now();
+  const data = {
+    name, x, z,
+    y: y === null ? null : y,
+    category: fCategory.value,
+    note: fNote.value.trim() || null,
+    updatedAt: now, updatedBy: state.username,
+  };
+  if (state.selectedId) {
+    if (fb) {
+      try { await fb.updateMarker(state.selectedId, data); }
+      catch (e) { alert('更新に失敗しました: ' + e.message); return; }
+    } else {
+      const cur = state.markers.get(state.selectedId);
+      state.markers.set(state.selectedId, { ...cur, ...data });
+    }
+  } else {
+    const id = uid();
+    const full = { ...data, createdAt: now, createdBy: state.username };
+    if (fb) {
+      try { await fb.addMarker(id, full); }
+      catch (e) { alert('追加に失敗しました: ' + e.message); return; }
+    } else {
+      state.markers.set(id, { id, ...full });
+    }
+  }
+  clearSelection();
+  renderMarkerList();
+  draw();
+});
+
+[fX, fY, fZ, fCategory].forEach(el => el.addEventListener('input', updatePortalHint));
+fCategory.addEventListener('change', updatePortalHint);
+
+/* =============================================================
+ * ポータル連携
+ * ============================================================= */
+function updatePortalHint() {
+  const cat = fCategory.value;
+  const x = parseInt(fX.value, 10);
+  const z = parseInt(fZ.value, 10);
+  if (cat !== 'portal' || Number.isNaN(x) || Number.isNaN(z)) {
+    portalHint.hidden = true;
+    return;
+  }
+  // 反対ディメンション
+  let otherDim, otherLabel, ox, oz;
+  if (state.dimension === 'overworld') {
+    otherDim = 'nether'; otherLabel = 'ネザー';
+    ox = Math.round(x / 8); oz = Math.round(z / 8);
+  } else if (state.dimension === 'nether') {
+    otherDim = 'overworld'; otherLabel = 'オーバーワールド';
+    ox = x * 8; oz = z * 8;
+  } else {
+    portalHint.hidden = true;
+    return;
+  }
+  const yRaw = fY.value.trim();
+  const oy = yRaw === '' ? '' : parseInt(yRaw, 10);
+  const yPart = oy === '' ? '' : `, y: ${oy}`;
+  portalHint.innerHTML = `
+    <div class="ph-title">🌀 ${otherLabel} の対応座標</div>
+    <div class="ph-coords">x: ${ox}${yPart}, z: ${oz}</div>
+    <button type="button" id="portal-link-add">${otherLabel} 側にもポータルを追加</button>
+  `;
+  portalHint.hidden = false;
+  $('portal-link-add').onclick = async () => {
+    const name = fName.value.trim() || 'ポータル';
+    const linkedName = `${name} (${otherLabel}側)`;
+    const now = Date.now();
+    const data = {
+      name: linkedName,
+      x: ox, z: oz,
+      y: oy === '' ? null : oy,
+      category: 'portal',
+      note: `自動リンク: ${state.dimension === 'overworld' ? 'OW' : 'ネザー'} (${x}, ${z})`,
+      createdAt: now, updatedAt: now,
+      createdBy: state.username, updatedBy: state.username,
+    };
+    const id = uid();
+    if (fb) {
+      try { await fb.addMarkerIn(otherDim, id, data); }
+      catch (e) { alert('追加に失敗しました: ' + e.message); return; }
+      alert(`${otherLabel} 側に「${linkedName}」を追加しました。`);
+    } else {
+      alert('Firebase未接続のため、リンク先追加はできません。');
+    }
+  };
+}
+
+/* =============================================================
+ * リスト描画
+ * ============================================================= */
+function renderMarkerList() {
+  const all = Array.from(state.markers.values());
+  const filtered = all.filter(matchesFilter).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  markerCount.textContent = filtered.length;
+  markerTotal.textContent = all.length;
+  if (filtered.length === 0) {
+    markerList.innerHTML = `<div class="marker-list-empty">${all.length === 0 ? 'まだ施設はありません' : '条件に一致する施設がありません'}</div>`;
+    return;
+  }
+  markerList.innerHTML = filtered.map(m => {
+    const cat = catById(m.category);
+    const sel = m.id === state.selectedId ? 'selected' : '';
+    const yPart = (m.y !== null && m.y !== undefined && m.y !== '') ? `, y:${m.y}` : '';
+    const meta = m.updatedBy ? `${escapeHtml(m.updatedBy)} · ${formatTime(m.updatedAt)}` : '';
+    return `<div class="marker-item ${sel}" data-id="${m.id}">
+      <div class="marker-icon" style="background:${cat.color}">${cat.icon}</div>
+      <div class="marker-info">
+        <div class="marker-name">${escapeHtml(m.name)}</div>
+        <div class="marker-coords">x:${m.x}${yPart}, z:${m.z}</div>
+        ${meta ? `<div class="marker-meta">${meta}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+  markerList.querySelectorAll('.marker-item').forEach(el => {
+    el.addEventListener('click', () => selectMarker(el.dataset.id));
+  });
+}
+
+function renderRouteList() {
+  const arr = Array.from(state.routes.values()).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  routeCount.textContent = arr.length;
+  if (arr.length === 0) {
+    routeList.innerHTML = '<div class="route-list-empty">まだルートはありません</div>';
+    return;
+  }
+  routeList.innerHTML = arr.map(r => {
+    const sel = r.id === state.selectedRouteId ? 'selected' : '';
+    const meta = r.updatedBy ? `${escapeHtml(r.updatedBy)} · ${formatTime(r.updatedAt)} · ${(r.points||[]).length}点` : `${(r.points||[]).length}点`;
+    return `<div class="route-item ${sel}" data-id="${r.id}">
+      <div class="route-color-swatch" style="background:${r.color || '#4a7eff'}"></div>
+      <div class="route-info">
+        <div class="route-name">${escapeHtml(r.name || '(無題ルート)')}</div>
+        <div class="route-meta">${meta}</div>
+      </div>
+    </div>`;
+  }).join('');
+  routeList.querySelectorAll('.route-item').forEach(el => {
+    el.addEventListener('click', () => selectRoute(el.dataset.id));
+  });
+}
+
+/* =============================================================
+ * ルート編集
+ * ============================================================= */
+function selectRoute(id) {
+  const r = state.routes.get(id);
+  if (!r) return;
+  state.selectedRouteId = id;
+  state.selectedId = null;
+  rName.value = r.name || '';
+  rColor.value = r.color || '#4a7eff';
+  updateRouteColorActive();
+  state.routeDraft = { id, name: r.name || '', color: r.color || '#4a7eff', points: (r.points || []).map(p => ({ ...p })) };
+  setRouteFormMode('edit');
+  setSidebarTab('routes');
+  updateRouteBannerCount();
+  renderMarkerList();
+  renderRouteList();
+  // ルート全体が見えるように中心 (簡易)
+  if (r.points && r.points.length > 0) {
+    const v = view();
+    let sx = 0, sz = 0;
+    for (const p of r.points) { sx += p.x; sz += p.z; }
+    v.cx = sx / r.points.length;
+    v.cz = sz / r.points.length;
+    saveLocal();
+  }
+  draw();
+}
+function clearRouteSelection() {
+  state.selectedRouteId = null;
+  state.routeDraft = null;
+  rName.value = '';
+  rColor.value = '#4a7eff';
+  updateRouteColorActive();
+  setRouteFormMode('add');
+  updateRouteBannerCount();
+  renderRouteList();
+  draw();
+}
+function setRouteFormMode(mode) {
+  if (mode === 'edit') {
+    routeFormTitle.textContent = 'ルートを編集';
+    routeSubmit.textContent = '更新';
+    routeCancel.style.display = '';
+    routeDelete.style.display = '';
+  } else {
+    routeFormTitle.textContent = 'ルートを追加';
+    routeSubmit.textContent = '追加';
+    routeCancel.style.display = 'none';
+    routeDelete.style.display = 'none';
+  }
+}
+
+routeCancel.onclick = clearRouteSelection;
+
+routeDelete.onclick = async () => {
+  if (!state.selectedRouteId) return;
+  const r = state.routes.get(state.selectedRouteId);
+  if (!r) return;
+  if (!confirm(`ルート「${r.name}」を削除します。よろしいですか?`)) return;
+  if (fb) {
+    try { await fb.removeRoute(state.selectedRouteId); }
+    catch (e) { alert('削除に失敗しました: ' + e.message); return; }
+  } else {
+    state.routes.delete(state.selectedRouteId);
+  }
+  clearRouteSelection();
+};
+
+routeForm.addEventListener('submit', async e => {
+  e.preventDefault();
+  const name = rName.value.trim();
+  if (!name) return;
+  if (!state.routeDraft || state.routeDraft.points.length < 2) {
+    alert('ルートには2点以上が必要です。「マップで点追加」から点を追加してください。');
+    return;
+  }
+  const now = Date.now();
+  const data = {
+    name,
+    color: rColor.value,
+    points: state.routeDraft.points,
+    updatedAt: now, updatedBy: state.username,
+  };
+  const editId = state.selectedRouteId;
+  if (editId) {
+    if (fb) {
+      try { await fb.updateRoute(editId, data); }
+      catch (e) { alert('更新に失敗しました: ' + e.message); return; }
+    } else {
+      const cur = state.routes.get(editId);
+      state.routes.set(editId, { ...cur, ...data });
+    }
+  } else {
+    const id = uid();
+    const full = { ...data, createdAt: now, createdBy: state.username };
+    if (fb) {
+      try { await fb.addRoute(id, full); }
+      catch (e) { alert('追加に失敗しました: ' + e.message); return; }
+    } else {
+      state.routes.set(id, { id, ...full });
+    }
+  }
+  clearRouteSelection();
+  renderRouteList();
+  draw();
+});
+
+$('route-add-points').onclick = () => setTool('route');
+
+function finishRouteDraft() {
+  if (state.routeDraft && state.routeDraft.points.length >= 2) {
+    cancelTool();
+    setSidebarTab('routes');
+    rName.focus();
+  } else {
+    alert('2点以上必要です');
+  }
+}
+function cancelRouteDraft() {
+  if (state.selectedRouteId) {
+    // 編集中だった → 元に戻す
+    const r = state.routes.get(state.selectedRouteId);
+    if (r) state.routeDraft = { id: r.id, name: r.name, color: r.color, points: (r.points || []).map(p => ({ ...p })) };
+  } else {
+    state.routeDraft = null;
+  }
+  updateRouteBannerCount();
+  draw();
+}
+
+rName.addEventListener('input', () => {
+  if (state.routeDraft) state.routeDraft.name = rName.value.trim();
+});
+
+/* =============================================================
+ * サイドバー タブ
+ * ============================================================= */
+function setSidebarTab(tab) {
+  state.sidebarTab = tab;
+  document.querySelectorAll('.sb-tab').forEach(el => el.classList.toggle('active', el.dataset.tab === tab));
+  $('panel-markers').hidden = tab !== 'markers';
+  $('panel-routes').hidden  = tab !== 'routes';
+}
+document.querySelectorAll('.sb-tab').forEach(el => {
+  el.addEventListener('click', () => setSidebarTab(el.dataset.tab));
+});
+
+/* =============================================================
+ * モバイルドロワー
+ * ============================================================= */
+$('menu-toggle').onclick = () => {
+  sidebarEl.classList.toggle('open');
+  sidebarOverlay.classList.toggle('active');
+};
+sidebarOverlay.onclick = () => {
+  sidebarEl.classList.remove('open');
+  sidebarOverlay.classList.remove('active');
+};
+
+/* =============================================================
+ * ユーザー名
+ * ============================================================= */
+usernameInput.addEventListener('input', () => {
+  state.username = usernameInput.value.trim() || '名無しさん';
+  saveLocal();
+});
+
+/* =============================================================
+ * モーダル: ヘルプ / 背景 / データIO
+ * ============================================================= */
+$('help-btn').onclick = () => helpModal.classList.add('active');
+$('help-close').onclick = () => helpModal.classList.remove('active');
+helpModal.addEventListener('click', e => { if (e.target === helpModal) helpModal.classList.remove('active'); });
+
+const bgModal = $('bg-modal');
+const bgUrl = $('bg-url');
+const bgXMin = $('bg-xmin'), bgZMin = $('bg-zmin'), bgXMax = $('bg-xmax'), bgZMax = $('bg-zmax');
+const bgOpacity = $('bg-opacity'), bgOpacityVal = $('bg-opacity-val');
+const bgVisible = $('bg-visible');
+function openBgModal() {
+  const cfg = bgConf();
+  $('bg-dim-label').textContent = dimById(state.dimension).label;
+  bgUrl.value = cfg.url || '';
+  bgXMin.value = cfg.xMin;
+  bgZMin.value = cfg.zMin;
+  bgXMax.value = cfg.xMax;
+  bgZMax.value = cfg.zMax;
+  bgOpacity.value = Math.round((cfg.opacity ?? 0.7) * 100);
+  bgOpacityVal.textContent = bgOpacity.value + '%';
+  bgVisible.checked = !!cfg.visible;
+  bgModal.classList.add('active');
+}
+bgOpacity.addEventListener('input', () => bgOpacityVal.textContent = bgOpacity.value + '%');
+$('bg-btn').onclick = openBgModal;
+$('bg-cancel').onclick = () => bgModal.classList.remove('active');
+bgModal.addEventListener('click', e => { if (e.target === bgModal) bgModal.classList.remove('active'); });
+$('bg-save').onclick = async () => {
+  const cfg = {
+    url: bgUrl.value.trim(),
+    xMin: parseInt(bgXMin.value, 10) || 0,
+    zMin: parseInt(bgZMin.value, 10) || 0,
+    xMax: parseInt(bgXMax.value, 10) || 0,
+    zMax: parseInt(bgZMax.value, 10) || 0,
+    opacity: parseInt(bgOpacity.value, 10) / 100,
+    visible: bgVisible.checked,
+  };
+  if (cfg.xMax <= cfg.xMin || cfg.zMax <= cfg.zMin) {
+    alert('座標範囲が不正です (xMax > xMin, zMax > zMin にしてください)');
+    return;
+  }
+  Object.assign(state.backgrounds[state.dimension], cfg);
+  loadBackgroundImage(state.dimension);
+  if (fb && fb.saveBackground) {
+    try { await fb.saveBackground(cfg); }
+    catch (e) { alert('保存に失敗しました: ' + e.message); return; }
+  }
+  bgModal.classList.remove('active');
+  draw();
+};
+
+const dataModal = $('data-modal');
+$('data-btn').onclick = () => dataModal.classList.add('active');
+$('data-cancel').onclick = () => dataModal.classList.remove('active');
+dataModal.addEventListener('click', e => { if (e.target === dataModal) dataModal.classList.remove('active'); });
+
+async function buildExportPayload() {
+  const out = { version: 1, room: state.roomId, exportedAt: Date.now(), dimensions: {} };
+  if (fb && fb.fetchAll) {
+    try {
+      const all = await fb.fetchAll();
+      out.dimensions = all;
+      return out;
+    } catch (e) { console.warn(e); }
+  }
+  // ローカルモード or フェッチ失敗時は現在ディメンションのみ
+  out.dimensions[state.dimension] = {
+    markers: Object.fromEntries(Array.from(state.markers, ([id, m]) => [id, m])),
+    routes:  Object.fromEntries(Array.from(state.routes,  ([id, r]) => [id, r])),
+  };
+  return out;
+}
+
+$('data-export').onclick = async () => {
+  const payload = await buildExportPayload();
+  const json = JSON.stringify(payload, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `mc-map-${state.roomId}-${new Date().toISOString().slice(0,10)}.json`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
+
+$('data-export-copy').onclick = async () => {
+  const payload = await buildExportPayload();
+  const json = JSON.stringify(payload, null, 2);
+  try { await navigator.clipboard.writeText(json); alert('クリップボードにコピーしました'); }
+  catch (e) { alert('コピー失敗: ' + e.message); }
+};
+
+$('data-import').onclick = async () => {
+  const file = $('data-file').files[0];
+  const paste = $('data-paste').value.trim();
+  let text = '';
+  if (file) text = await file.text();
+  else if (paste) text = paste;
+  else { alert('ファイルかテキストを指定してください'); return; }
+
+  let payload;
+  try { payload = JSON.parse(text); }
+  catch (e) { alert('JSON解析失敗: ' + e.message); return; }
+  if (!payload || typeof payload !== 'object' || !payload.dimensions) {
+    alert('不正なフォーマットです (dimensions が必要)');
+    return;
+  }
+  const replace = $('data-replace').checked;
+  if (replace && !confirm('置き換えモードです。既存のデータが上書きされます。本当に続行しますか?')) return;
+
+  if (fb && fb.writeAll) {
+    try { await fb.writeAll(payload.dimensions, replace); alert('インポート完了'); }
+    catch (e) { alert('インポート失敗: ' + e.message); return; }
+  } else {
+    // ローカル: 現在ディメンションだけ反映
+    const dimData = payload.dimensions[state.dimension];
+    if (dimData) {
+      if (replace) { state.markers.clear(); state.routes.clear(); }
+      for (const [id, m] of Object.entries(dimData.markers || {})) state.markers.set(id, { id, ...m });
+      for (const [id, r] of Object.entries(dimData.routes  || {})) state.routes.set(id, { id, ...r });
+      renderMarkerList(); renderRouteList(); draw();
+    }
+    alert('ローカルモードでインポートしました (Firebase未接続)');
+  }
+  dataModal.classList.remove('active');
+  $('data-paste').value = '';
+  $('data-file').value = '';
+};
+
+/* =============================================================
+ * 初期化
+ * ============================================================= */
+async function init() {
+  loadLocal();
+  state.roomId = getRoomFromHash();
+  roomLabel.textContent = state.roomId;
+  usernameInput.value = state.username;
+  buildCategoryUI();
+  buildDimensionTabs();
+  buildRouteColorPalette();
+  fCategory.value = 'home';
+  setRouteFormMode('add');
+  setFormMode('add');
+  updatePortalHint();
+
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+
+  const ok = await initFirebase();
+  if (!ok) {
+    setStatus('warn', firebaseConfig.apiKey === 'YOUR_API_KEY' ? 'ローカル動作 (未設定)' : '接続失敗');
+  }
+
+  window.addEventListener('hashchange', () => location.reload());
+
+  draw();
+}
+
+init();
+</script>
+</body>
+</html>
