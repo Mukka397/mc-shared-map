@@ -108,6 +108,29 @@
   }
   .tool-banner button:hover { background: rgba(0,0,0,0.4); }
 
+  /* ===== Coordinate input panel for active tool ===== */
+  .tool-coord-panel {
+    position: absolute; top: 102px; left: 12px;
+    background: rgba(17,20,26,0.92); border: 1px solid #2a2f3a; border-radius: 6px;
+    padding: 8px 10px; display: none; flex-direction: column; gap: 6px;
+    z-index: 5; font-size: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+  .tool-coord-panel.active { display: flex; }
+  .tool-coord-panel .hint { color: #8b94a3; font-size: 11px; }
+  .tool-coord-panel .row { display: flex; gap: 4px; align-items: center; }
+  .tool-coord-panel label { color: #8b94a3; font-size: 11px; }
+  .tool-coord-panel input {
+    width: 64px; background: #1f242e; color: #e6e8eb; border: 1px solid #2a2f3a;
+    border-radius: 4px; padding: 3px 6px; font-size: 12px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .tool-coord-panel input:focus { outline: none; border-color: #4a7eff; }
+  .tool-coord-panel button {
+    background: #4a7eff; color: white; border: none; border-radius: 4px;
+    padding: 5px 10px; font-size: 12px; cursor: pointer; font-family: inherit;
+  }
+  .tool-coord-panel button:hover { background: #3b6dec; }
+
   .legend {
     position: absolute; top: 12px; right: 12px;
     background: rgba(17, 20, 26, 0.85); padding: 8px 10px; border-radius: 6px;
@@ -286,6 +309,16 @@
       <button id="tool-route" title="ルート作成 (クリックで点追加, Esc で終了)">🛤️</button>
     </div>
     <div id="tool-banner" class="tool-banner" hidden></div>
+    <div id="tool-coord-panel" class="tool-coord-panel">
+      <div class="hint" id="tool-coord-hint">座標で点を追加</div>
+      <div class="row">
+        <label>X</label>
+        <input type="number" id="tcp-x" step="1" placeholder="X">
+        <label>Z</label>
+        <input type="number" id="tcp-z" step="1" placeholder="Z">
+      </div>
+      <button id="tcp-add">+ 追加</button>
+    </div>
     <div class="coord-display" id="coord-display">x: 0, z: 0</div>
     <div class="zoom-controls">
       <button id="zoom-in" title="ズームイン">+</button>
@@ -1297,18 +1330,19 @@ function setTool(tool) {
   if (tool === 'distance') {
     canvas.classList.add('tool-distance');
     $('tool-distance').classList.add('active');
-    showBanner('📏 距離計測: 2点をクリック (Esc で終了)', () => cancelTool());
+    showBanner('📏 距離計測: 2点をクリック or 座標入力 (Esc で終了)', () => cancelTool());
   } else if (tool === 'route') {
     canvas.classList.add('tool-route');
     $('tool-route').classList.add('active');
     if (!state.routeDraft) {
       state.routeDraft = { id: null, name: rName.value.trim() || '', color: rColor.value, points: [] };
     }
-    showBanner(`🛤️ ルート作成: クリックで点追加 (現在 <span id="route-pt-count">${state.routeDraft.points.length}</span> 点)`, () => finishRouteDraft(), '完了 (Enter)');
+    showBanner(`🛤️ ルート作成: クリック or 座標入力で点追加 (現在 <span id="route-pt-count">${state.routeDraft.points.length}</span> 点)`, () => finishRouteDraft(), '完了 (Enter)');
     setSidebarTab('routes');
   } else {
     hideBanner();
   }
+  updateToolCoordPanel();
   draw();
 }
 function cancelTool() {
@@ -1317,7 +1351,57 @@ function cancelTool() {
   canvas.classList.remove('tool-distance', 'tool-route');
   document.querySelectorAll('.tools-overlay button').forEach(b => b.classList.remove('active'));
   hideBanner();
+  updateToolCoordPanel();
   // routeDraft は finishRouteDraft / cancelRouteDraft で扱う
+  draw();
+}
+
+function updateToolCoordPanel() {
+  const panel = $('tool-coord-panel');
+  const hint = $('tool-coord-hint');
+  if (state.tool === 'distance') {
+    panel.classList.add('active');
+    hint.textContent = '座標で点を追加 (1点目→2点目)';
+  } else if (state.tool === 'route') {
+    panel.classList.add('active');
+    hint.textContent = '座標で点を追加';
+  } else {
+    panel.classList.remove('active');
+  }
+}
+
+$('tcp-add').onclick = addPointFromCoordPanel;
+['tcp-x', 'tcp-z'].forEach(id => {
+  $(id).addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); addPointFromCoordPanel(); }
+  });
+});
+
+function addPointFromCoordPanel() {
+  const x = parseInt($('tcp-x').value, 10);
+  const z = parseInt($('tcp-z').value, 10);
+  if (Number.isNaN(x) || Number.isNaN(z)) {
+    alert('X と Z を整数で入力してください');
+    return;
+  }
+  if (state.tool === 'distance') {
+    if (!state.distance.from || (state.distance.from && state.distance.to)) {
+      state.distance = { from: { x, z }, to: null };
+    } else {
+      state.distance.to = { x, z };
+    }
+  } else if (state.tool === 'route') {
+    if (!state.routeDraft) {
+      state.routeDraft = { id: null, name: rName.value.trim() || '', color: rColor.value, points: [] };
+    }
+    state.routeDraft.points.push({ x, z });
+    updateRouteBannerCount();
+  } else {
+    return;
+  }
+  $('tcp-x').value = '';
+  $('tcp-z').value = '';
+  $('tcp-x').focus();
   draw();
 }
 function showBanner(html, onClick, btnText = '完了') {
